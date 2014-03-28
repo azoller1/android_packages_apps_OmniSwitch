@@ -139,15 +139,21 @@ public class SwitchManager {
             close();
         }
 
-        if (ad.getTaskId() >= 0) {
+        Intent intent = ad.getIntent();
+        boolean floating = (intent.getFlags() & Intent.FLAG_FLOATING_WINDOW) == Intent.FLAG_FLOATING_WINDOW;
+        if (ad.getTaskId() >= 0 && !floating) {
             // This is an active task; it should just go to the foreground.
             am.moveTaskToFront(ad.getTaskId(),
                     ActivityManager.MOVE_TASK_WITH_HOME);
         } else {
-            Intent intent = ad.getIntent();
-            intent.addFlags(Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY
-                    | Intent.FLAG_ACTIVITY_TASK_ON_HOME
-                    | Intent.FLAG_ACTIVITY_NEW_TASK);
+            if (!floating) {
+                intent.addFlags(Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY
+                       | Intent.FLAG_ACTIVITY_TASK_ON_HOME
+                       | Intent.FLAG_ACTIVITY_NEW_TASK);
+            } else {
+                intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK
+                       | Intent.FLAG_FLOATING_WINDOW);
+            }
             if (DEBUG)
                 Log.v(TAG, "Starting activity " + intent);
             try {
@@ -156,6 +162,27 @@ public class SwitchManager {
                 Log.e(TAG, "Recents does not have the permission to launch "
                         + intent, e);
             }
+        }
+    }
+
+    public void floatingTask(TaskDescription ad) {
+        if (ad.isKilled()) {
+            return;
+        }
+
+        close();
+
+        Intent intent = ad.getIntent();
+        intent.setFlags(Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY
+                    | Intent.FLAG_ACTIVITY_NEW_TASK
+                    | Intent.FLAG_FLOATING_WINDOW);
+        if (DEBUG)
+                Log.v(TAG, "Starting activity " + intent);
+        try {
+             mContext.startActivity(intent);
+        } catch (SecurityException e) {
+             Log.e(TAG, "Recents does not have the permission to launch "
+                     + intent, e);
         }
     }
 
@@ -290,13 +317,17 @@ public class SwitchManager {
         switchTask(ad, close);
     }
     
-    public void startIntentFromtString(String intent, boolean close) {
+    public void startIntentFromtString(String intent, boolean close, boolean float_window) {
         if(close){
             close();
         }
 
         try {
             Intent intentapp = Intent.parseUri(intent, 0);
+            if(float_window) {
+                intentapp.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK
+                                | Intent.FLAG_FLOATING_WINDOW);
+            }
             mContext.startActivity(intentapp);
         } catch (URISyntaxException e) {
             Log.e(TAG, "URISyntaxException: [" + intent + "]");
